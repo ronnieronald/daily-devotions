@@ -1,0 +1,278 @@
+<!DOCTYPE html>  
+<html lang="es">  
+<head>  
+<meta charset="UTF-8">  
+<title>Recordatorio Devocional</title>  
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  
+
+<style>  
+body{
+font-family: Arial; 
+padding:20px; 
+background:#f0f4ff;
+}  
+
+h1{
+text-align:center; 
+color:#1e3a8a;
+}  
+
+button, textarea{
+width:100%; 
+margin-bottom:15px; 
+padding:10px; 
+border-radius:8px;
+}  
+
+button{
+background:#1e3a8a; 
+color:#fff; 
+cursor:pointer;
+}  
+
+textarea{
+min-height:150px;
+}
+
+.hoyBox{
+background:#1e3a8a;
+color:white;
+padding:20px;
+border-radius:15px;
+margin-bottom:20px;
+}
+
+.hoyBox button{
+background:white;
+color:#1e3a8a;
+font-weight:bold;
+}
+
+/* 🔥 PRELOADER */
+#preloader{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:#1e3a8a;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+z-index:9999;
+color:white;
+font-size:18px;
+transition:opacity 0.5s ease;
+}
+
+.loader{
+border:5px solid #fff;
+border-top:5px solid transparent;
+border-radius:50%;
+width:50px;
+height:50px;
+animation:spin 1s linear infinite;
+margin-bottom:15px;
+}
+
+@keyframes spin{
+0%{transform:rotate(0deg);}
+100%{transform:rotate(360deg);}
+}
+</style>  
+</head>  
+
+<body>   
+
+<!-- 🔄 PRELOADER -->
+<div id="preloader">
+  <div class="loader"></div>
+  <p>Cargando devocionales...</p>
+</div>
+
+<div id="hoyBox" class="hoyBox"></div>
+
+<button onclick="enviarLunes()">📤 Enviar semana completa</button>
+
+<h3>📩 Recordatorio de Mañana</h3>  
+<textarea id="mensajeManana" readonly></textarea>  
+
+<button onclick="enviarWhatsapp()">📲 Enviar por WhatsApp</button>  
+
+<script>  
+
+// 📄 SHEETS
+const SHEET_ID='2PACX-1vQK8r6I6vYuBhlxnU7pBKRkzknIwqLPFoyuF17xWeIhBihhMQ5JOfXdgy65YKn6sZQ-0BdvoS5Nj2S_';  
+const SHEET_PERSONAS='2PACX-1vR-MNaDBi3fnBUPiOUFhco9isoqWZJgPQW3KIGLhTaWMWsJhGqujWjfIgLpWx3xUiS_yAlzLd-2XbSu';
+
+// 🧠 CACHE
+let devocionalesCache=[];  
+let personasCache=[];
+let dataFinal=[];
+let telefonoManana='';  
+
+const dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
+function getHoy(){
+const d=new Date().getDay();
+return d===0?6:d-1;
+}
+
+window.addEventListener('load',()=>{  
+generarTodo();  
+});  
+
+// 📄 DEVOCIONALES
+async function cargarDevocionales(){  
+
+if(devocionalesCache.length) return devocionalesCache;  
+
+const url=`https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=0&single=true&output=tsv`;  
+
+const res=await fetch(url);  
+const text=await res.text();  
+
+const lines=text.trim().split('\n');  
+
+devocionalesCache=lines.slice(1).map(line=>{  
+const cols=line.split('\t').map(c=>c.trim());  
+
+return{  
+devocional:cols[1]||'',  
+libro:cols[2]||'',  
+pagina:cols[3]||''  
+};  
+});  
+
+return devocionalesCache;  
+}  
+
+// 👤 PERSONAS
+async function cargarPersonas(){
+
+if(personasCache.length) return personasCache;
+
+const url=`https://docs.google.com/spreadsheets/d/e/${SHEET_PERSONAS}/pub?gid=0&single=true&output=tsv`;
+
+const res=await fetch(url);
+const text=await res.text();
+
+const lines=text.trim().split('\n');
+
+personasCache=lines.slice(1).map(line=>{
+const cols=line.split('\t').map(c=>c.trim());
+
+return{
+persona:cols[1]||'',
+telefono:cols[2]||''
+};
+});
+
+return personasCache;
+}
+
+// 🔗 UNIR TODO
+async function generarTodo(){  
+
+const devos=await cargarDevocionales();  
+const personas=await cargarPersonas();
+
+dataFinal = devos.map((e,i)=>({
+...e,
+persona:personas[i]?.persona || '',
+telefono:personas[i]?.telefono || ''
+}));
+
+mostrarHoy(dataFinal);
+generarManana(dataFinal);
+
+// 🔥 OCULTAR PRELOADER CON FADE
+const preloader=document.getElementById("preloader");
+preloader.style.opacity="0";
+setTimeout(()=>{ preloader.style.display="none"; },500);
+}  
+
+// 🔥 HOY
+function mostrarHoy(rows){
+
+const hoy=getHoy();
+const e=rows[hoy];
+
+if(!e) return;
+
+document.getElementById("hoyBox").innerHTML=`
+<h2>Hoy ${dias[hoy]}</h2>
+<p><b>${e.persona}</b></p>
+<p>${e.devocional}</p>
+<p>${e.libro}</p>
+<button onclick="enviarDia(${hoy})">📲 Enviar ahora</button>
+`;
+}
+
+// 📩 MAÑANA
+function generarManana(rows){
+
+const hoy=getHoy();
+const e=rows[(hoy+1)%7];
+
+if(!e) return;
+
+telefonoManana=e.telefono;
+
+document.getElementById('mensajeManana').value=  
+`👤 ${e.persona}, recuerda que tienes un devocional mañana:
+📄 Tema: ${e.devocional}
+📚 Libro: ${e.libro}
+📋 Página: ${e.pagina}`;  
+}
+
+// 📲 ENVIAR MAÑANA
+function enviarWhatsapp(){  
+
+if(!telefonoManana){  
+alert("No hay número disponible");  
+return;  
+}  
+
+const mensaje=document.getElementById('mensajeManana').value;  
+const texto=encodeURIComponent(mensaje);  
+const numero=telefonoManana.replace(/\D/g,'');  
+
+window.open(`https://wa.me/${numero}?text=${texto}`,'_blank');  
+}  
+
+// 📲 ENVIAR HOY
+function enviarDia(idx){
+const e=dataFinal[idx];
+const num=e.telefono.replace(/\D/g,'');
+
+const txt=encodeURIComponent(`👤 Hola, ${e.persona}.
+📖 Hoy compartes:
+📄 ${e.devocional}
+📚 ${e.libro}
+📋 Página: ${e.pagina}`);
+
+window.open(`https://wa.me/${num}?text=${txt}`);
+}
+
+// 📤 ENVIAR SEMANA
+function enviarLunes(){
+
+let msg=`📖 *Devocionales de la semana*\n\n`;
+
+dataFinal.forEach((e,i)=>{
+msg+=`📌 ${dias[i]}
+👤 ${e.persona}
+📄 ${e.devocional}
+
+`;
+});
+
+window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+}
+
+</script>  
+
+</body>  
+</html>
